@@ -1,0 +1,15 @@
+{
+    "exness_mt5": {
+        "login": "111080033",
+        "server": "MetaQuotes-Demo",
+        "connected": true,
+        "broker": "Exness / MetaTrader 5"
+    },
+    "binance": {
+        "api_key": "",
+        "api_secret": "",
+        "testnet": true,
+        "connected": false,
+        "broker": "Binance Crypto Exchange"
+    }
+}
