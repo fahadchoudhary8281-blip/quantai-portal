@@ -1,4 +1,4 @@
-﻿"""
+"""
 Quantitative Self-Learning AI Agent
 - Combines Technical Quant Features + News Sentiment Score.
 - Trains on 6 months of historical data with walk-forward online learning.
@@ -13,18 +13,19 @@ import pandas as pd
 from typing import Dict, Any, Tuple, Optional
 from config import cfg
 
-# Try importing LightGBM or Scikit-learn
+# Try importing LightGBM or Scikit-learn with broad exception handling for Linux/Cloud containers
 try:
     import lightgbm as lgb
     LGB_AVAILABLE = True
-except ImportError:
+except Exception:
+    lgb = None
     LGB_AVAILABLE = False
 
 try:
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
     from sklearn.preprocessing import StandardScaler
     SKLEARN_AVAILABLE = True
-except ImportError:
+except Exception:
     SKLEARN_AVAILABLE = False
 
 class SelfLearningAgent:
