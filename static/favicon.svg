@@ -1,0 +1,29 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="quantGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Background rounded octagon -->
+  <rect x="5" y="5" width="90" height="90" rx="22" fill="#0f172a" stroke="url(#quantGrad)" stroke-width="3" />
+  
+  <!-- Candlesticks graphic -->
+  <line x1="30" y1="28" x2="30" y2="72" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" />
+  <rect x="25" y="38" width="10" height="24" rx="2" fill="#10b981" />
+  
+  <line x1="50" y1="20" x2="50" y2="80" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" />
+  <rect x="45" y="30" width="10" height="35" rx="2" fill="#f59e0b" />
+
+  <line x1="70" y1="25" x2="70" y2="75" stroke="#06b6d4" stroke-width="2.5" stroke-linecap="round" />
+  <rect x="65" y="32" width="10" height="28" rx="2" fill="#06b6d4" />
+  
+  <!-- AI Neural Pulse Line -->
+  <polyline points="20,68 35,42 50,58 70,26 82,34" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+  <circle cx="70" cy="26" r="4.5" fill="#f8fafc" stroke="#06b6d4" stroke-width="2" />
+</svg>
