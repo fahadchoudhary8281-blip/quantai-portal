@@ -769,12 +769,14 @@ async function syncLiveWallet() {
         const cardStatus = document.getElementById('card-binance-status');
         const mainBal = document.getElementById('stat-balance');
         const mainRoi = document.getElementById('stat-roi');
-        if (data.status === 'success' && data.balance > 0) {
+        if (data.status === 'success') {
             const balStr = `$${Number(data.balance).toFixed(2)} ${data.currency || 'USDT'}`;
             if (balEl) balEl.innerText = balStr;
-            if (cardStatus) cardStatus.innerText = `Live: ${balStr} (${data.mode || 'Futures'})`;
+            if (cardStatus) cardStatus.innerText = `Live: ${balStr} (${data.mode || 'Wallet'})`;
             if (mainBal) mainBal.innerText = `$${Number(data.balance).toFixed(2)}`;
-            if (mainRoi) mainRoi.innerText = `Real Binance Balance (${data.currency || 'USDT'})`;
+            if (mainRoi) mainRoi.innerText = `Real Binance Live (${data.currency || 'USDT'})`;
+        } else if (data.status === 'error') {
+            if (cardStatus) cardStatus.innerText = `API: ${data.message ? data.message.substring(0, 30) : 'Check Keys'}`;
         }
     } catch(e) {
         console.error("Wallet sync error:", e);
@@ -782,6 +784,25 @@ async function syncLiveWallet() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+    // Auto-restore saved Binance keys from browser LocalStorage
+    const savedKey = localStorage.getItem('binance_key');
+    const savedSecret = localStorage.getItem('binance_secret');
+    const savedTestnet = localStorage.getItem('binance_testnet') === 'true';
+    if (savedKey && savedSecret) {
+        const keyInput = document.getElementById('binance-key');
+        const secretInput = document.getElementById('binance-secret');
+        const testnetInput = document.getElementById('binance-testnet');
+        if (keyInput) keyInput.value = savedKey;
+        if (secretInput) secretInput.value = savedSecret;
+        if (testnetInput) testnetInput.checked = savedTestnet;
+
+        fetch('/api/connect_binance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: savedKey, api_secret: savedSecret, testnet: savedTestnet })
+        }).then(() => syncLiveWallet()).catch(e => console.error(e));
+    }
+
     await loadCandlestickChart();
     await triggerBacktest();
     fetchNews();
@@ -790,7 +811,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     setInterval(fetchNews, 60000);
     setInterval(syncActivePositions, 3000);
     setInterval(syncLiveWallet, 10000);
-});
 });
 </script>
 
@@ -852,8 +872,8 @@ window.addEventListener('DOMContentLoaded', async () => {
                 <input type="password" id="binance-secret" placeholder="Enter Binance API Secret" class="w-full p-2.5 rounded-xl bg-gray-900 border border-gray-700 text-xs text-gray-100 focus:outline-none focus:border-cyan-500 font-mono">
             </div>
             <div class="flex items-center gap-2 pt-1">
-                <input type="checkbox" id="binance-testnet" checked class="accent-cyan-500">
-                <label for="binance-testnet" class="text-xs text-gray-300">Use Binance Spot/Futures Testnet (Safe Mode)</label>
+                <input type="checkbox" id="binance-testnet" class="accent-cyan-500">
+                <label for="binance-testnet" class="text-xs text-gray-300">Use Testnet Sandbox (Leave unchecked for Real Live Account)</label>
             </div>
             <button onclick="saveBinanceAccount()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-600 hover:to-emerald-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all">
                 <i class="fa-solid fa-link"></i> Save & Connect Binance API
@@ -995,10 +1015,22 @@ async function saveExnessAccount() {
 }
 
 async function saveBinanceAccount() {
-    const apiKey = document.getElementById('binance-key').value;
-    const apiSecret = document.getElementById('binance-secret').value;
+    const apiKey = document.getElementById('binance-key').value.trim();
+    const apiSecret = document.getElementById('binance-secret').value.trim();
     const testnet = document.getElementById('binance-testnet').checked;
     const statusBox = document.getElementById('modal-status-msg');
+
+    if (!apiKey || !apiSecret) {
+        statusBox.className = "mt-4 p-2.5 rounded-xl text-xs text-center bg-rose-500/20 border border-rose-500/40 text-rose-300";
+        statusBox.innerText = "Please enter both Binance API Key and Secret.";
+        statusBox.classList.remove('hidden');
+        return;
+    }
+
+    // Persist permanently in Browser LocalStorage
+    localStorage.setItem('binance_key', apiKey);
+    localStorage.setItem('binance_secret', apiSecret);
+    localStorage.setItem('binance_testnet', testnet ? 'true' : 'false');
 
     try {
         const res = await fetch('/api/connect_binance', {
@@ -1010,8 +1042,10 @@ async function saveBinanceAccount() {
         statusBox.className = "mt-4 p-2.5 rounded-xl text-xs text-center bg-emerald-500/20 border border-emerald-500/40 text-emerald-300";
         statusBox.innerText = data.message || "Binance API Attached Successfully!";
         statusBox.classList.remove('hidden');
-        document.getElementById('card-binance-status').innerText = testnet ? "Testnet Connected" : "Production Live API";
-        setTimeout(closeAccountModal, 1500);
+        document.getElementById('card-binance-status').innerText = testnet ? "Testnet Connected" : "Connecting Live API...";
+        await syncLiveWallet();
+        showToast("BINANCE API CONNECTED", testnet ? "Testnet Mode Active" : "Fetching Live Real Account Balance...", "success");
+        setTimeout(closeAccountModal, 1200);
     } catch(e) {
         statusBox.className = "mt-4 p-2.5 rounded-xl text-xs text-center bg-rose-500/20 border border-rose-500/40 text-rose-300";
         statusBox.innerText = "Failed to save Binance API.";
