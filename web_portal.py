@@ -216,6 +216,65 @@ def connect_binance():
 
     return jsonify({"status": "success", "message": "Binance Account API Connected Successfully!"})
 
+@app.route("/api/binance/balance", methods=["GET"])
+@login_required
+def api_binance_balance():
+    accs = load_accounts()
+    b_data = accs.get("binance", {})
+    if not b_data or not b_data.get("api_key"):
+        return jsonify({"status": "unconnected", "balance": 0.00, "currency": "USDT"})
+
+    api_key = b_data.get("api_key")
+    api_secret = b_data.get("api_secret")
+    testnet = b_data.get("testnet", False)
+
+    try:
+        import hmac
+        import hashlib
+        import time
+        import urllib.request
+
+        ts = int(time.time() * 1000)
+        query = f"timestamp={ts}"
+        sig = hmac.new(api_secret.encode('utf-8'), query.encode('utf-8'), hashlib.sha256).hexdigest()
+        
+        # Query Futures wallet balance
+        base_url = "https://testnet.binancefuture.com" if testnet else "https://fapi.binance.com"
+        url = f"{base_url}/fapi/v2/account?{query}&signature={sig}"
+        
+        req = urllib.request.Request(url, headers={"X-MBX-APIKEY": api_key})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            total_bal = float(data.get("totalWalletBalance", 0.0) or data.get("totalMarginBalance", 0.0))
+            return jsonify({
+                "status": "success",
+                "balance": round(total_bal, 2),
+                "currency": "USDT",
+                "mode": "Futures (USDⓈ-M)",
+                "unrealized_pnl": float(data.get("totalUnrealizedProfit", 0.0))
+            })
+    except Exception:
+        # Fallback to Spot if futures is not enabled or throws error
+        try:
+            spot_base = "https://testnet.binance.vision" if testnet else "https://api.binance.com"
+            spot_url = f"{spot_base}/api/v3/account?{query}&signature={sig}"
+            req = urllib.request.Request(spot_url, headers={"X-MBX-APIKEY": api_key})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                usdt_bal = 0.0
+                for b in data.get("balances", []):
+                    if b.get("asset") == "USDT":
+                        usdt_bal = float(b.get("free", 0.0)) + float(b.get("locked", 0.0))
+                        break
+                return jsonify({
+                    "status": "success",
+                    "balance": round(usdt_bal, 2),
+                    "currency": "USDT",
+                    "mode": "Spot Wallet"
+                })
+        except Exception as e2:
+            return jsonify({"status": "error", "message": str(e2), "balance": 0.00})
+
 @app.route("/api/candles", methods=["GET"])
 @login_required
 def api_candles():

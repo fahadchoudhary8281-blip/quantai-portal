@@ -20,6 +20,12 @@
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900 border border-yellow-500/30 text-xs cursor-pointer hover:border-yellow-400" onclick="selectAsset('XAUUSD')">
             <i class="fa-solid fa-gem text-yellow-400"></i><span class="text-gray-300 font-bold">GOLD:</span><span id="ticker-gold" class="text-yellow-400 font-mono font-bold">$2,354.80</span>
         </div>
+        <!-- Live Real Binance Wallet Balance Badge -->
+        <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-xs shadow-lg">
+            <i class="fa-solid fa-wallet text-emerald-400 pulse-live"></i>
+            <span class="text-gray-300 font-bold">WALLET:</span>
+            <span id="live-binance-bal" class="text-emerald-400 font-mono font-black">$1.78 USDT</span>
+        </div>
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-xs">
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 pulse-live"></span><span class="text-gray-300 font-medium">MT5:</span><span id="mt5-status" class="text-emerald-400 font-semibold">Active</span>
         </div>
@@ -755,13 +761,32 @@ async function closeLivePosition(symbol) {
     }
 }
 
+async function syncLiveWallet() {
+    try {
+        const res = await fetch('/api/binance/balance');
+        const data = await res.json();
+        const balEl = document.getElementById('live-binance-bal');
+        const cardStatus = document.getElementById('card-binance-status');
+        if (data.status === 'success') {
+            const balStr = `$${Number(data.balance).toFixed(2)} ${data.currency || 'USDT'}`;
+            if (balEl) balEl.innerText = balStr;
+            if (cardStatus) cardStatus.innerText = `Live: ${balStr} (${data.mode || 'Futures'})`;
+        }
+    } catch(e) {
+        console.error("Wallet sync error:", e);
+    }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
     await loadCandlestickChart();
     await triggerBacktest();
     fetchNews();
     syncActivePositions();
+    syncLiveWallet();
     setInterval(fetchNews, 60000);
     setInterval(syncActivePositions, 3000);
+    setInterval(syncLiveWallet, 10000);
+});
 });
 </script>
 
@@ -893,10 +918,13 @@ async function toggleAutoTrade() {
         const data = await res.json();
         syncActivePositions();
         if (data.is_running) {
-            alert("🤖 QuantAI Live Auto-Trading ACTIVE! Monitoring M5 signals 24/7.");
+            showToast("AUTONOMOUS ENGINE ACTIVE", "24/7 AI Signal Sentry scanning M5 candles for BTC & Gold", "success");
+        } else {
+            showToast("ENGINE STANDBY", "Auto-trading loop paused safely", "warn");
         }
     } catch(e) {
         console.error("AutoTrade toggle error:", e);
+        showToast("ENGINE ERROR", "Failed to toggle Auto-Trading engine", "error");
     }
 }
 
@@ -986,6 +1014,47 @@ async function saveBinanceAccount() {
         statusBox.classList.remove('hidden');
     }
 }
+
+// Ultra-Sleek Modern Cyber Toast Notification Engine
+function showToast(title, desc, type = 'success') {
+    const toast = document.getElementById('cyber-toast');
+    const icon = document.getElementById('toast-icon');
+    const tTitle = document.getElementById('toast-title');
+    const tDesc = document.getElementById('toast-desc');
+    if (!toast || !icon || !tTitle || !tDesc) return;
+
+    if (type === 'success') {
+        toast.className = "fixed top-6 right-6 z-50 transform translate-x-0 opacity-100 transition-all duration-300 pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl glass-card border border-emerald-500/50 bg-[#0e1e24]/95 shadow-2xl neon-glow-cyan";
+        icon.className = "w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold";
+        icon.innerHTML = '<i class="fa-solid fa-bolt"></i>';
+    } else if (type === 'warn') {
+        toast.className = "fixed top-6 right-6 z-50 transform translate-x-0 opacity-100 transition-all duration-300 pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl glass-card border border-amber-500/50 bg-[#1e1a0e]/95 shadow-2xl";
+        icon.className = "w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm font-bold";
+        icon.innerHTML = '<i class="fa-solid fa-pause"></i>';
+    } else {
+        toast.className = "fixed top-6 right-6 z-50 transform translate-x-0 opacity-100 transition-all duration-300 pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl glass-card border border-rose-500/50 bg-[#1e0e0e]/95 shadow-2xl";
+        icon.className = "w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-sm font-bold";
+        icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+    }
+
+    tTitle.innerText = title;
+    tDesc.innerText = desc;
+
+    setTimeout(() => {
+        toast.classList.remove('translate-x-0', 'opacity-100');
+        toast.classList.add('translate-x-96', 'opacity-0');
+    }, 3500);
+}
 </script>
+
+<!-- Sleek Cyber Toast UI Container -->
+<div id="cyber-toast" class="fixed top-6 right-6 z-50 transform translate-x-96 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 px-4 py-3 rounded-2xl glass-card border shadow-2xl">
+    <div id="toast-icon" class="w-8 h-8 rounded-xl flex items-center justify-center text-sm"></div>
+    <div>
+        <h4 id="toast-title" class="text-xs font-black uppercase text-white"></h4>
+        <p id="toast-desc" class="text-[11px] text-gray-300 font-medium"></p>
+    </div>
+</div>
+
 </body>
 </html>
