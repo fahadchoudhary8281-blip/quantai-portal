@@ -767,10 +767,14 @@ async function syncLiveWallet() {
         const data = await res.json();
         const balEl = document.getElementById('live-binance-bal');
         const cardStatus = document.getElementById('card-binance-status');
-        if (data.status === 'success') {
+        const mainBal = document.getElementById('stat-balance');
+        const mainRoi = document.getElementById('stat-roi');
+        if (data.status === 'success' && data.balance > 0) {
             const balStr = `$${Number(data.balance).toFixed(2)} ${data.currency || 'USDT'}`;
             if (balEl) balEl.innerText = balStr;
             if (cardStatus) cardStatus.innerText = `Live: ${balStr} (${data.mode || 'Futures'})`;
+            if (mainBal) mainBal.innerText = `$${Number(data.balance).toFixed(2)}`;
+            if (mainRoi) mainRoi.innerText = `Real Binance Balance (${data.currency || 'USDT'})`;
         }
     } catch(e) {
         console.error("Wallet sync error:", e);
