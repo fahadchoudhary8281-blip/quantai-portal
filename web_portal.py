@@ -222,58 +222,99 @@ def api_binance_balance():
     accs = load_accounts()
     b_data = accs.get("binance", {})
     if not b_data or not b_data.get("api_key"):
-        return jsonify({"status": "unconnected", "balance": 0.00, "currency": "USDT"})
+        return jsonify({"status": "unconnected", "balance": 0.00, "currency": "USDT", "message": "No API Key configured"})
 
-    api_key = b_data.get("api_key")
-    api_secret = b_data.get("api_secret")
-    testnet = b_data.get("testnet", False)
+    api_key = str(b_data.get("api_key", "")).strip()
+    api_secret = str(b_data.get("api_secret", "")).strip()
+    testnet = bool(b_data.get("testnet", False))
 
+    if not api_key or not api_secret:
+        return jsonify({"status": "unconnected", "balance": 0.00, "currency": "USDT", "message": "API Key or Secret is missing"})
+
+    import hmac
+    import hashlib
+    import time
+    import urllib.request
+    import urllib.error
+
+    errors = []
+
+    # 1. Try Binance USDⓈ-M Futures Balance
     try:
-        import hmac
-        import hashlib
-        import time
-        import urllib.request
-
         ts = int(time.time() * 1000)
-        query = f"timestamp={ts}"
+        query = f"recvWindow=60000&timestamp={ts}"
         sig = hmac.new(api_secret.encode('utf-8'), query.encode('utf-8'), hashlib.sha256).hexdigest()
         
-        # Query Futures wallet balance
         base_url = "https://testnet.binancefuture.com" if testnet else "https://fapi.binance.com"
         url = f"{base_url}/fapi/v2/account?{query}&signature={sig}"
         
-        req = urllib.request.Request(url, headers={"X-MBX-APIKEY": api_key})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        req = urllib.request.Request(url, headers={"X-MBX-APIKEY": api_key, "User-Agent": "QuantAI/2.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             total_bal = float(data.get("totalWalletBalance", 0.0) or data.get("totalMarginBalance", 0.0))
+            avail_bal = float(data.get("availableBalance", total_bal))
             return jsonify({
                 "status": "success",
                 "balance": round(total_bal, 2),
+                "available": round(avail_bal, 2),
                 "currency": "USDT",
                 "mode": "Futures (USDⓈ-M)",
                 "unrealized_pnl": float(data.get("totalUnrealizedProfit", 0.0))
             })
-    except Exception:
-        # Fallback to Spot if futures is not enabled or throws error
+    except urllib.error.HTTPError as he:
         try:
-            spot_base = "https://testnet.binance.vision" if testnet else "https://api.binance.com"
-            spot_url = f"{spot_base}/api/v3/account?{query}&signature={sig}"
-            req = urllib.request.Request(spot_url, headers={"X-MBX-APIKEY": api_key})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                usdt_bal = 0.0
-                for b in data.get("balances", []):
-                    if b.get("asset") == "USDT":
-                        usdt_bal = float(b.get("free", 0.0)) + float(b.get("locked", 0.0))
-                        break
-                return jsonify({
-                    "status": "success",
-                    "balance": round(usdt_bal, 2),
-                    "currency": "USDT",
-                    "mode": "Spot Wallet"
-                })
-        except Exception as e2:
-            return jsonify({"status": "error", "message": str(e2), "balance": 0.00})
+            err_body = json.loads(he.read().decode('utf-8'))
+            errors.append(f"Futures: {err_body.get('msg', str(he))}")
+        except Exception:
+            errors.append(f"Futures HTTP {he.code}")
+    except Exception as e:
+        errors.append(f"Futures: {str(e)}")
+
+    # 2. Try Binance Spot & Funding Wallet Balance
+    try:
+        ts = int(time.time() * 1000)
+        query = f"recvWindow=60000&timestamp={ts}"
+        sig = hmac.new(api_secret.encode('utf-8'), query.encode('utf-8'), hashlib.sha256).hexdigest()
+        
+        spot_base = "https://testnet.binance.vision" if testnet else "https://api.binance.com"
+        spot_url = f"{spot_base}/api/v3/account?{query}&signature={sig}"
+        
+        req = urllib.request.Request(spot_url, headers={"X-MBX-APIKEY": api_key, "User-Agent": "QuantAI/2.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            total_usd = 0.0
+            for b in data.get("balances", []):
+                asset = b.get("asset", "")
+                free = float(b.get("free", 0.0))
+                locked = float(b.get("locked", 0.0))
+                tot = free + locked
+                if tot > 0:
+                    if asset in ["USDT", "USDC", "FDUSD", "BUSD", "USD"]:
+                        total_usd += tot
+                    elif asset == "BTC":
+                        total_usd += (tot * 65000.0)
+            
+            return jsonify({
+                "status": "success",
+                "balance": round(total_usd, 2),
+                "currency": "USDT",
+                "mode": "Spot Wallet"
+            })
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = json.loads(he.read().decode('utf-8'))
+            errors.append(f"Spot: {err_body.get('msg', str(he))}")
+        except Exception:
+            errors.append(f"Spot HTTP {he.code}")
+    except Exception as e:
+        errors.append(f"Spot: {str(e)}")
+
+    return jsonify({
+        "status": "error",
+        "balance": 0.00,
+        "currency": "USDT",
+        "message": " | ".join(errors) or "Unable to connect to Binance API. Please check API Permissions."
+    })
 
 @app.route("/api/candles", methods=["GET"])
 @login_required
